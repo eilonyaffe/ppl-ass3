@@ -138,66 +138,12 @@ const normalizeUnion = (ute: UnionTExp): TExp =>
 const flattenUnion = (tes: TExp[]): TExp[] => 
     (tes.length > 0) ? 
         isUnionTExp(tes[0]) ? [...tes[0].components, ...flattenUnion(tes.slice(1))] :
-        isInterTExp(tes[0]) ? [dnf(tes[0]), ...flattenInter(tes.slice(1))] :
         [tes[0], ...flattenUnion(tes.slice(1))] :
     [];
 
-// export type InterTExp = {tag: "InterTExp"; components: TExp[]};
-
 export type InterTExp = { tag: "InterTExp"; components: TExp[]};
-export const makeInterTExp = (tes: TExp[]): TExp =>{
-    if (containsType(tes, makeNeverTExp())){
-        return makeNeverTExp();
-    }
-    if (tes.length==0){ //like intersection with never
-        return makeNeverTExp();
-    }
-
-    if (tes.length==1){ //like intersection with never
-        return tes[0];
-    }
-    //from here assuming tes.length==2
-    const Anys = filter((x)=>isAnyTExp(x), tes);
-    const nonAnys = filter((x)=>!isAnyTExp(x), tes);
-    if (Anys.length==2){ //only Anys
-        return makeAnyTExp();
-    }
-    if (Anys.length==1){ //filtered out Anys
-        return nonAnys[0];
-    }
-    //reached only if there aren't any anys and nevers as the types to intersect
-    const atomics = filter((x)=>(!isInterTExp(x) && !isUnionTExp(x)), tes);
-    const unions = filter((x)=>isUnionTExp(x), tes);
-    const inters = filter((x)=>isInterTExp(x), tes);
-
-    if (atomics.length==2){ //Case 1: Atomic x Atomic
-        return normalizeInter(({tag: "InterTExp", components: flattenSortInter(atomics)}));
-    }
-
-    if (inters.length==2){ //Case 2: Intersection x Intersection
-        const firstInter = inters[0];
-        const secondInter = inters[1];
-        if(isInterTExp(firstInter) && isInterTExp(secondInter)){
-            const newComponents = concat(firstInter.components,secondInter.components);
-           return normalizeInter(({tag: "InterTExp", components: flattenSortInter(newComponents)}));
-        }
-    }
-
-    else if (atomics.length==1 && inters.length==1){ //Case 3: Atomic x Intersection
-        const firstInter = inters[0];
-        if(isInterTExp(firstInter)){
-            const newComponents = concat(firstInter.components,atomics);
-            return normalizeInter(({tag: "InterTExp", components: flattenSortInter(newComponents)}));
-        }
-    }
-    
-    else{ //Case 4: Union x Intersection
-        const comps = concat(atomics,concat(inters, unions))
-       return dnf({ tag: "InterTExp", components: comps}); 
-    }
-
-    return normalizeInter(({tag: "InterTExp", components: flattenSortInter(tes)})); 
-}
+export const makeInterTExp = (tes: TExp[]): TExp =>
+    dnf(normalizeInter(({tag: "InterTExp", components: flattenSortInter(tes)})))
     
 
 export const isInterTExp = (x: any): x is InterTExp => x.tag === "InterTExp";
@@ -212,20 +158,18 @@ const normalizeInter = (ute: InterTExp): TExp =>
     ute;
 
 const flattenSortInter = (tes: TExp[]): TExp[] =>
-    removeDuplicatesAndNever(sort(superTypeComparator, flattenInter(tes)));
+    removeDuplicatesAndAnyAndNever(sort(superTypeComparator, flattenInter(tes)));
 
 const flattenInter = (tes: TExp[]): TExp[] => 
     (tes.length > 0) ? 
-        isUnionTExp(tes[0]) ? [...tes[0].components, ...flattenInter(tes.slice(1))] :
-        isInterTExp(tes[0]) ? [dnf(tes[0]), ...flattenInter(tes.slice(1))] :
+        isInterTExp(tes[0]) ? [...tes[0].components, ...flattenInter(tes.slice(1))] :
         [tes[0], ...flattenInter(tes.slice(1))] :
     [];
 
 
-const makeDiffTExp = (te1: TExp, te2: TExp): TExp => {
+export const makeDiffTExp = (te1: TExp, te2: TExp): TExp => {
     if (isNeverTExp(te1) || isNeverTExp(te2)) return te1;
-    if (isSubType(te1, te2)) return makeNeverTExp();  //te1 is smaller than te2
-    if (isAnyTExp(te2)) return  makeNeverTExp();
+    if (isSubType(te1, te2) || isAnyTExp(te2) || (isProcTExp(te1)||isProcTExp(te2))) return makeNeverTExp();  //edge cases
     if (isUnionTExp(te1) || isInterTExp(te1)){ //Case 1: te1 is union or intersection
         if (!isUnionTExp(te2) && !isInterTExp(te2)){ //Case 1.a: te2 is atomic type
             const filteredList = filter(((x:TExp)=>x.tag!=te2.tag), te1.components);
@@ -245,9 +189,10 @@ const makeDiffTExp = (te1: TExp, te2: TExp): TExp => {
     else { //Case 2: te1 is atomic type
         if (!isUnionTExp(te2) && !isInterTExp(te2)){ //Case 2.a: te2 is also atomic type
             if(isAnyTExp(te1)){
-                const filteredList = filter((x:TExp)=> x.tag!=te2.tag, allSimpleAtomics);
-                return makeUnionTExp(filteredList); //must be of length 3
-
+                if(!isAnyTExp(te2)) return te1;
+                else{
+                    return makeNeverTExp();
+                }
             }
             if (te1.tag==te2.tag) return makeNeverTExp();
             return te1;
@@ -294,6 +239,13 @@ const removeDuplicatesAndNever = (tes: TExp[]): TExp[] =>
     containsType(tes.slice(1), tes[0]) ? removeDuplicatesAndNever(tes.slice(1)) :
     isNeverTExp(tes[0]) ? removeDuplicatesAndNever(tes.slice(1)) :
     [tes[0], ...removeDuplicatesAndNever(tes.slice(1))];
+
+const removeDuplicatesAndAnyAndNever = (tes: TExp[]): TExp[] =>
+    isEmpty(tes) ? tes :
+    containsType(tes.slice(1), tes[0]) ? removeDuplicatesAndAnyAndNever(tes.slice(1)) :
+    isNeverTExp(tes[0]) ? removeDuplicatesAndAnyAndNever(tes.slice(1)) :
+    isAnyTExp(tes[0]) ? removeDuplicatesAndAnyAndNever(tes.slice(1)) :
+    [tes[0], ...removeDuplicatesAndAnyAndNever(tes.slice(1))];
 // L52 END
 
 
@@ -312,7 +264,6 @@ const superTypeComparator = (te1: TExp, te2: TExp): number =>
 // If TExp is an InterTExp - it is already normalized 
 // (flat, no duplicates, sorted, no never, no any)
 // If TExp is a UnionTExp - it is already normalized
-
 
 
 export const dnf = (te: TExp): TExp =>
@@ -353,15 +304,24 @@ export const crossProduct = (ll1: TExp[][], ll2: TExp[][]): TExp[][] =>
             ll1).flat();
 
 // SubType comparator
-export const isSubType = (te1: TExp, te2: TExp): boolean => 
-    (isUnionTExp(te1) && isUnionTExp(te2)) ? isSubset(te1.components, te2.components) :
-    isUnionTExp(te2) ? containsType(te2.components, te1) :
-    (isInterTExp(te1) && isInterTExp(te2)) ? isSubset(te1.components, te2.components) :
-    isInterTExp(te2) ? containsType(te2.components, te1) :
-    (isProcTExp(te1) && isProcTExp(te2)) ? checkProcTExps(te1, te2) :
-    isTVar(te1) ? equals(te1, te2) :
-    isAtomicTExp(te1) ? equals(te1, te2) :
-    false;
+export const isSubType = (te1: TExp, te2: TExp): boolean => {
+    if(isAtomicTExp(te1) && isAtomicTExp(te2)){ //Case A: both atomic
+        if (isAnyTExp(te2)) return true;
+        if (isNeverTExp(te1)) return true;
+        return (te1.tag==te2.tag);
+    }
+    if(isCompoundTExp(te1) && isAtomicTExp(te2)) return false;  //Case B: te1 compound, te2 atomic
+
+    if(isAtomicTExp(te1) && (isUnionTExp(te2) || isInterTExp(te2))){ //Case C: te1 atomic, te2 compound
+        return containsType(te2.components, te1);
+    }
+    
+    if((isUnionTExp(te1) || isInterTExp(te1)) && (isUnionTExp(te2) || isInterTExp(te2))){ //Case D: both compound
+        return isSubset(te1.components, te2.components);
+    }
+    else return false;
+}
+
 
 // True when te is in tes or is a subtype of one of the elements of tes
 export const containsType = (tes: TExp[], te: TExp): boolean =>
