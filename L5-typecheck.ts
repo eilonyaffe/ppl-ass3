@@ -57,7 +57,7 @@ export const typeofExp = (exp: Parsed, tenv: TEnv): Result<TExp> =>
     isStrExp(exp) ? makeOk(typeofStr(exp)) :
     isPrimOp(exp) ? typeofPrim(exp) :
     isVarRef(exp) ? applyTEnv(tenv, exp.var) :
-    isIfExp(exp) ? typeofIfNormal(exp, tenv) :
+    // isIfExp(exp) ? typeofIf(exp, tenv) :
     isProcExp(exp) ? typeofProc(exp, tenv) :
     isAppExp(exp) ? typeofApp(exp, tenv) :
     isLetExp(exp) ? typeofLet(exp, tenv) :
@@ -141,14 +141,14 @@ export const typeofIfNormal = (ifExp: IfExp, tenv: TEnv): Result<TExp> => {
 };
 
 // L52 Structured methods
-const isTypePredApp = (e: Exp, tenv: TEnv): Result<{/* Add parameters */}> => { //TODO Neya return to uncommented
-}
+// const isTypePredApp = (e: Exp, tenv: TEnv): Result<{/* Add parameters */}> => {
+// }
 
-export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> =>  //TODO Neya return to uncommented
-    either(
-        bind (isTypePredApp(ifExp.test, tenv), ({/* Add parameter here */}) => {}),
-        makeOk,
-        () => typeofIfNormal(ifExp, tenv));
+// export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> =>
+//     either(
+//         bind (isTypePredApp(ifExp.test, tenv), ({/* Add parameter here */}) => {}),
+//         makeOk,
+//         () => typeofIfNormal(ifExp, tenv));
 
 
 // Purpose: compute the type of a proc-exp
