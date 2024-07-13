@@ -59,7 +59,7 @@ export const typeofExp = (exp: Parsed, tenv: TEnv): Result<TExp> =>
     isStrExp(exp) ? makeOk(typeofStr(exp)) :
     isPrimOp(exp) ? typeofPrim(exp) :
     isVarRef(exp) ? applyTEnv(tenv, exp.var) :
-    // isIfExp(exp) ? typeofIf(exp, tenv) :
+    isIfExp(exp) ? typeofIf(exp, tenv) :
     isTypePredExp(exp) ? makeOk(exp.predTE) :
     isProcExp(exp) ? typeofProc(exp, tenv) :
     isAppExp(exp) ? typeofApp(exp, tenv) :
