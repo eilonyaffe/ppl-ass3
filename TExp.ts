@@ -54,8 +54,8 @@ export type AtomicTExp = NumTExp | BoolTExp | StrTExp | VoidTExp | AnyTExp | Nev
 export const isAtomicTExp = (x: any): x is AtomicTExp =>
     isNumTExp(x) || isBoolTExp(x) || isStrTExp(x) || isVoidTExp(x) || isAnyTExp(x) || isNeverTExp(x);
 
-export type CompoundTExp = ProcTExp | TupleTExp | UnionTExp | InterTExp;
-export const isCompoundTExp = (x: any): x is CompoundTExp => isProcTExp(x) || isTupleTExp(x) || isUnionTExp(x) || isInterTExp(x);
+export type CompoundTExp = ProcTExp | TupleTExp | UnionTExp | InterTExp | TypePredTExp;
+export const isCompoundTExp = (x: any): x is CompoundTExp => isProcTExp(x) || isTupleTExp(x) || isUnionTExp(x) || isInterTExp(x) || isTypePredTExp(x);
 
 export type NonTupleTExp = AtomicTExp | ProcTExp | TVar | UnionTExp | InterTExp;
 export const isNonTupleTExp = (x: any): x is NonTupleTExp =>
@@ -96,6 +96,12 @@ export const isProcTExp = (x: any): x is ProcTExp => x.tag === "ProcTExp";
 // Uniform access to all components of a ProcTExp
 export const procTExpComponents = (pt: ProcTExp): TExp[] =>
     [...pt.paramTEs, pt.returnTE];
+
+//TypePredTExp addition
+export type TypePredTExp = { tag: "TypePredTExp"; paramTEs: TExp[]; predTE: TExp; };
+export const makeTypePredTExp = (paramTEs: TExp[], predTE: TExp): TypePredTExp =>
+    ({tag: "TypePredTExp", paramTEs: paramTEs, predTE: predTE});
+export const isTypePredTExp = (x: any): x is TypePredTExp => x.tag === "TypePredTExp";
 
 export type TupleTExp = NonEmptyTupleTExp | EmptyTupleTExp;
 export const isTupleTExp = (x: any): x is TupleTExp =>
@@ -417,7 +423,19 @@ export const parseTExp = (texp: Sexp): Result<TExp> =>
 const parseCompoundTExp = (texps: Sexp[]): Result<TExp> =>
     (texps[0] === "union") ? parseUnionTExp(texps) :
     (texps[0] === "inter") ? parseInterTExp(texps) :
+    (texps[2] === 'is?') ? parseTypePredTExp(texps) :
     parseProcTExp(texps);
+
+const parseTypePredTExp = (texps: Sexp[]): Result<TExp> => {
+    const pos = texps.indexOf('->');
+    return (pos === -1)  ? makeFailure(`Type Pred expression without -> - ${format(texps)}`) :
+           (pos === 0) ? makeFailure(`No param type in Type Pred texp - ${format(texps)}`) :
+           (pos === texps.length - 1) ? makeFailure(`No return type in Type Pred texp - ${format(texps)}`) :
+           (texps.slice(pos + 1).indexOf('->') > -1) ? makeFailure(`Only one -> allowed in a Type Pred exp - ${format(texps)}`) :
+           bind(parseTupleTExp(texps.slice(0, pos)), (args: TExp[]) =>
+               mapv(parseTExp(texps[pos + 2]), (predTE: TExp) =>
+                    makeTypePredTExp(args, predTE)));
+}
 
 // Expect (union texp1 ...)
 const parseUnionTExp = (texps: Sexp[]): Result<TExp> =>
@@ -493,6 +511,9 @@ export const unparseTExp = (te: TExp): Result<string> => { //receives a type exp
                                 parenthesizeUnion(componentTEs)) :
         isInterTExp(x) ? mapv(mapResult(unparseTExp, x.components), (componentTEs: string[]) => 
             parenthesizeInter(componentTEs)) :
+        isTypePredTExp(x) ? bind(unparseTuple(x.paramTEs), (paramTEs: string[]) =>
+                                mapv(unparseTExp(x.predTE), (predTE: string) =>
+                                    [...paramTEs, '->', 'is?', predTE])) : //change it wont be array? paramTEs[0]?
         isProcTExp(x) ? bind(unparseTuple(x.paramTEs), (paramTEs: string[]) =>
                             mapv(unparseTExp(x.returnTE), (returnTE: string) =>
                                 [...paramTEs, '->', returnTE])) :

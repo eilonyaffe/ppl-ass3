@@ -4,11 +4,13 @@ import { equals, map, zipWith } from 'ramda';
 import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLetrecExp, isLetExp, isNumExp,
          isPrimOp, isProcExp, isProgram, isStrExp, isVarRef, parseL5Exp, unparse,
          AppExp, BoolExp, DefineExp, Exp, IfExp, LetrecExp, LetExp, NumExp,
-         Parsed, PrimOp, ProcExp, Program, StrExp, parseL5Program } from "./L5-ast";
+         Parsed, PrimOp, ProcExp, Program, StrExp, parseL5Program, 
+         isTypePredExp} from "./L5-ast";
 import { applyTEnv, makeEmptyTEnv, makeExtendTEnv, TEnv } from "./TEnv";
 import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeVoidTExp,
          parseTE, unparseTExp, makeUnionTExp,
-         BoolTExp, NumTExp, StrTExp, TExp, VoidTExp, isSubType } from "./TExp";
+         BoolTExp, NumTExp, StrTExp, TExp, VoidTExp, isSubType, 
+         isTypePredTExp} from "./TExp";
 import { isEmpty, allT, first, rest, NonEmptyList, List, isNonEmptyList } from '../shared/list';
 import { Result, makeFailure, bind, makeOk, zipWithResult, either } from '../shared/result';
 import { parse as p } from "../shared/parser";
@@ -58,6 +60,7 @@ export const typeofExp = (exp: Parsed, tenv: TEnv): Result<TExp> =>
     isPrimOp(exp) ? typeofPrim(exp) :
     isVarRef(exp) ? applyTEnv(tenv, exp.var) :
     // isIfExp(exp) ? typeofIf(exp, tenv) :
+    isTypePredExp(exp) ? makeOk(exp.predTE) :
     isProcExp(exp) ? typeofProc(exp, tenv) :
     isAppExp(exp) ? typeofApp(exp, tenv) :
     isLetExp(exp) ? typeofLet(exp, tenv) :
@@ -140,15 +143,23 @@ export const typeofIfNormal = (ifExp: IfExp, tenv: TEnv): Result<TExp> => {
                 constraint2);
 };
 
-// L52 Structured methods
-// const isTypePredApp = (e: Exp, tenv: TEnv): Result<{/* Add parameters */}> => {
-// }
+//L52 Structured methods (3.4)
+const isTypePredApp = (e: Exp, tenv: TEnv): Result<TExp> => isAppExp(e) ? isVarRef(e.rator) ? 
+    getTExpPred(tenv, e.rator.var) : makeFailure("ERROR") : makeFailure("ERROR");
 
-// export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> =>
-//     either(
-//         bind (isTypePredApp(ifExp.test, tenv), ({/* Add parameter here */}) => {}),
-//         makeOk,
-//         () => typeofIfNormal(ifExp, tenv));
+const getTExpPred = (tenv: TEnv, sy: string): Result<TExp> => {
+    const pTE = applyTEnv(tenv, sy);
+    if (pTE.tag === "Ok"){
+        const temp: Result<TExp> = isTypePredTExp(pTE.value) ? makeOk(pTE.value.predTE) : makeFailure("ERROR");
+        return temp;
+    }
+    return makeFailure("ERROR");
+}
+export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> =>
+    either(
+        bind (isTypePredApp(ifExp.test, tenv), (paramTE: TExp) => makeOk(paramTE)),
+        makeOk,
+        () => typeofIfNormal(ifExp, tenv));
 
 
 // Purpose: compute the type of a proc-exp
@@ -174,6 +185,7 @@ export const typeofProc = (proc: ProcExp, tenv: TEnv): Result<TExp> => {
 export const typeofApp = (app: AppExp, tenv: TEnv): Result<TExp> =>
     bind(typeofExp(app.rator, tenv), (ratorTE: TExp) => {
         if (! isProcTExp(ratorTE)) {
+            if (isTypePredTExp(ratorTE)){ return makeOk(ratorTE.predTE)};
             return bind(unparseTExp(ratorTE), (rator: string) =>
                         bind(unparse(app), (exp: string) =>
                             makeFailure<TExp>(`Application of non-procedure: ${rator} in ${exp}`)));
