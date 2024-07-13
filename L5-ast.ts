@@ -261,7 +261,7 @@ const makePred = (param: TExp): CExp[] => {
 // (lambda (<vardecl>*) [: returnTE]? <CExp>+)
 const parseProcExp = (vars: Sexp, rest: Sexp[]): Result<ProcExp> => {
     if (isArray(vars)) {
-        if (rest[1] === "is?") {
+        if (rest[1] === "is?") { //TypePred predicats
             const args = mapResult(parseVarDecl, vars);
             const returnTE = parseTExp(rest[2]);
             const body: Result<CExp[]> = (returnTE.tag === "Ok" ? makeOk(makePred(returnTE.value)) : makeFailure("failed"));
@@ -270,7 +270,7 @@ const parseProcExp = (vars: Sexp, rest: Sexp[]): Result<ProcExp> => {
                     mapv(returnTE, (returnTE: TExp) =>
                         makeProcExp(args, body, returnTE))));
         }
-        else {
+        else { //non-TypePred procedures
             const args = mapResult(parseVarDecl, vars);
             const body = mapResult(parseL5CExp, rest[0] === ":" ? rest.slice(2) : rest);
             const returnTE = rest[0] === ":" ? parseTExp(rest[1]) : makeOk(makeFreshTVar());
@@ -387,7 +387,7 @@ export const unparse = (e: Parsed): Result<string> =>
     isLetExp(e) ? unparseLetExp(e) :
     isLetrecExp(e) ? unparseLetrecExp(e) :
     isProcExp(e) ? unparseProcExp(e) :
-    isTypePredExp(e) ? makeOk("is? " + unparseTExp(e.predTE)) :
+    isTypePredExp(e) ? makeOk(`is? ${unparseTExp(e.predTE)}`) :
     isLitExp(e) ? makeOk(unparseLitExp(e)) :
     isSetExp(e) ? unparseSetExp(e) :
     // DefineExp | Program

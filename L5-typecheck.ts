@@ -145,15 +145,15 @@ export const typeofIfNormal = (ifExp: IfExp, tenv: TEnv): Result<TExp> => {
 
 //L52 Structured methods (3.4)
 const isTypePredApp = (e: Exp, tenv: TEnv): Result<TExp> => isAppExp(e) ? isVarRef(e.rator) ? 
-    getTExpPred(tenv, e.rator.var) : makeFailure("ERROR") : makeFailure("ERROR");
+    getTExpPred(tenv, e.rator.var) : makeFailure("This is not a type-pred app") : makeFailure("This is not a type-pred app");
 
 const getTExpPred = (tenv: TEnv, sy: string): Result<TExp> => {
     const pTE = applyTEnv(tenv, sy);
     if (pTE.tag === "Ok"){
-        const temp: Result<TExp> = isTypePredTExp(pTE.value) ? makeOk(pTE.value.predTE) : makeFailure("ERROR");
+        const temp: Result<TExp> = isTypePredTExp(pTE.value) ? makeOk(pTE.value.predTE) : makeFailure("This is not a type-pred app");
         return temp;
     }
-    return makeFailure("ERROR");
+    return makeFailure("op not found");
 }
 export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> =>
     either(

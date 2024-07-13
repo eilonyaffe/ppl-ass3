@@ -328,7 +328,6 @@ export const isSubType = (te1: TExp, te2: TExp): boolean => {
     else return false;
 }
 
-
 // True when te is in tes or is a subtype of one of the elements of tes
 export const containsType = (tes: TExp[], te: TExp): boolean =>
     isEmpty(tes) ? false :
@@ -513,7 +512,7 @@ export const unparseTExp = (te: TExp): Result<string> => { //receives a type exp
             parenthesizeInter(componentTEs)) :
         isTypePredTExp(x) ? bind(unparseTuple(x.paramTEs), (paramTEs: string[]) =>
                                 mapv(unparseTExp(x.predTE), (predTE: string) =>
-                                    [...paramTEs, '->', 'is?', predTE])) : //change it wont be array? paramTEs[0]?
+                                    [...paramTEs, '->', 'is?', predTE])) : 
         isProcTExp(x) ? bind(unparseTuple(x.paramTEs), (paramTEs: string[]) =>
                             mapv(unparseTExp(x.returnTE), (returnTE: string) =>
                                 [...paramTEs, '->', returnTE])) :
